@@ -442,3 +442,14 @@ Project
 > Harness 不属于某个 AI，而属于项目本身。任何 AI 都只是 Harness 的客户端。
 >
 > 不要让 AI 拥有记忆，要让项目拥有记忆。
+```text
+.ai/
+├── START.md
+├── rules.md
+├── state.yaml
+├── memory.md
+├── todo.md
+├── decisions.md
+├── prompt-template.md
+├── workflow.md
+└── journal/
