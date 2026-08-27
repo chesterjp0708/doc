@@ -458,16 +458,23 @@ Project
 # keep-awake.ps1
 # 在 Windows 上运行,保持系统不进入休眠/睡眠,防止 RDP 断连。
 # 用 SetThreadExecutionState 直接告诉系统保持唤醒,比动鼠标更可靠。
-
-Add-Type -MemberDefinition @'
-[DllImport("kernel32.dll")]
-public static extern uint SetThreadExecutionState(uint esFlags);
-'@ -Name Awake -Namespace Kernel32
-
-# ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED = 0x80000003
-$flags = [uint32]0x80000003
-[Kernel32.Awake]::SetThreadExecutionState($flags) | Out-Null
-
+ 
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+ 
+public static class Awake
+{
+    [DllImport("kernel32.dll", SetLastError = true)]
+    public static extern uint SetThreadExecutionState(uint esFlags);
+ 
+    // ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED = 0x80000003
+    public static void Keep() => SetThreadExecutionState(0x80000003);
+}
+'@
+ 
+[Awake]::Keep()
+ 
 Write-Host "系统保持唤醒中,按 Ctrl+C 退出。"
 while ($true) { Start-Sleep -Seconds 60 }
 
