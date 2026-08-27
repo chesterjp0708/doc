@@ -453,3 +453,17 @@ Project
 ├── prompt-template.md
 ├── workflow.md
 └── journal/
+
+
+
+# keep-awake.ps1
+Add-Type -MemberDefinition @'
+[DllImport("kernel32.dll")]
+public static extern uint SetThreadExecutionState(uint esFlags);
+'@ -Name Awake -Namespace Kernel32
+
+# ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED = 0x80000003
+[Kernel32.Awake]::SetThreadExecutionState(0x80000003) | Out-Null
+
+Write-Host "系统保持唤醒中,按 Ctrl+C 退出。"
+while ($true) { Start-Sleep -Seconds 60 }
