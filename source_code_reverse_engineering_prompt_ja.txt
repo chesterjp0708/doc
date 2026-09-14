@@ -1,0 +1,1372 @@
+# ソースコードからシステム設計を逆生成するための統合プロンプト
+
+## 1. 役割
+
+あなたは、既存システムのソースコードを解析し、設計情報をリバースエンジニアリングするシニアシステムアーキテクトです。
+
+このプロジェクトについて、ソースコード、設定ファイル、SQL、テストコード、ビルド設定などを根拠として解析し、現在のシステム構成・依存関係・業務フロー・業務ロジックを整理してください。
+
+目的は、既存システムを理解していないエンジニアでも、この資料を読むことで以下を理解できる状態にすることです。
+
+- システム全体の構成
+- 各ファイル／モジュールの役割
+- モジュール間の依存関係
+- 処理の入口から出口までの流れ
+- DB・外部システムとの関係
+- 業務上どのような判断・制御が行われているか
+- 業務仕様と実装コードの対応関係
+- テストコードと業務仕様の対応関係
+
+最終的には、
+
+**業務仕様 ↔ ソースコード ↔ DB／SQL ↔ テストコード**
+
+を相互に追跡できる設計資料を作成することを目標とします。
+
+---
+
+## 2. 基本原則
+
+コードから確認できる事実と推測を必ず明確に分けてください。
+
+以下の3種類を使用してください。
+
+- **【確定】** ソースコードから直接確認できる内容
+- **【推定】** 複数のコード・命名・処理関係から合理的に推定できる内容
+- **【未確認】** コードだけでは判断できない内容
+
+推測した内容を事実として記述しないでください。
+
+ファイル名、クラス名、メソッド名だけで処理内容を判断せず、可能な限り実装内容を確認してください。
+
+重要な結論には必ず根拠を付与してください。
+
+根拠として以下を使用してください。
+
+- ファイルパス
+- クラス名
+- メソッド／関数名
+- SQL
+- Table
+- 設定値
+- API
+- Enum
+- Constant
+- Test Case
+
+記述例：
+
+```text
+【確定】
+申請情報の登録処理は以下で実装されている。
+
+src/main/java/xxx/service/ApplicationService.java
+→ ApplicationService#createApplication()
+```
+
+---
+
+## 3. 解析アーキテクチャ
+
+本解析は、一つの巨大な処理として実行するのではなく、以下の解析Skill／解析フェーズに分けて実行してください。
+
+```text
+Repo Structure Analyzer
+        ↓
+Entry Point Analyzer
+        ↓
+Dependency Analyzer
+        ↓
+Call Chain Tracer
+        ↓
+Business Rule Extractor
+        ↓
+Business Flow Generator
+        ↓
+State Machine Analyzer
+        ↓
+Database Analyzer
+        ↓
+External System Analyzer
+        ↓
+Error Handling Analyzer
+        ↓
+Test Spec Analyzer
+        ↓
+Spec-Code Mapper
+        ↓
+Excel Business Flow Generator
+        ↓
+Design Document Generator
+```
+
+必要に応じて一部の解析を並列実行して構いません。
+
+ただし、最終的には各解析結果を統合してください。
+
+---
+
+# Skill 1：Repo Structure Analyzer
+
+## 目的
+
+Repository全体を確認し、システムの大まかな構造を把握する。
+
+## 調査対象
+
+以下を特定してください。
+
+- Application Entry Point
+- Frontend
+- Backend
+- Controller / Handler
+- Service / UseCase
+- Domain
+- Repository / DAO
+- Database
+- Batch
+- External API
+- Authentication / Authorization
+- Configuration
+- Common / Utility
+- Middleware
+- Test
+- Build
+- Deploy
+- CI/CD
+
+生成物や外部ライブラリは原則として解析対象外としてください。
+
+例：
+
+- node_modules
+- vendor
+- target
+- build
+- dist
+- .git
+- generated files
+
+## 出力
+
+### ディレクトリ構成
+
+```text
+project
+├── frontend
+├── backend
+│   ├── controller
+│   ├── service
+│   ├── domain
+│   └── repository
+├── database
+└── config
+```
+
+### 主要ファイル一覧
+
+| Path | 種別 | 役割 | 関連モジュール | 重要度 |
+|---|---|---|---|---|
+
+すべてのファイルを機械的に列挙する必要はありません。
+
+業務理解に重要なファイルを優先してください。
+
+---
+
+# Skill 2：Entry Point Analyzer
+
+システム内で処理が開始される箇所を洗い出してください。
+
+例：
+
+- HTTP Request
+- REST API
+- Web画面
+- JSP / HTML Form
+- JavaScript Event
+- Batch
+- Scheduler
+- Message Queue
+- Webhook
+- CLI
+- Event Listener
+
+各Entry Pointについて以下を整理してください。
+
+| Entry Point | 種別 | Input | 最初の処理 | 関連機能 |
+|---|---|---|---|---|
+
+各Entry Pointから可能な限り、
+
+```text
+Input
+↓
+Controller / Handler
+↓
+Service
+↓
+Domain
+↓
+Repository
+↓
+DB / External API
+↓
+Response / Output
+```
+
+まで追跡してください。
+
+---
+
+# Skill 3：Dependency Analyzer
+
+モジュール、クラス、サービス間の依存関係を解析してください。
+
+以下を確認してください。
+
+- import
+- dependency injection
+- interface / implementation
+- inheritance
+- function call
+- event
+- callback
+- middleware
+- API call
+- database access
+- message queue
+- shared state
+- common utility
+
+単純なimport一覧ではなく、
+
+**実際に処理上どのモジュールがどのモジュールへ依存しているのか**
+
+を整理してください。
+
+Mermaidで可視化してください。
+
+```mermaid
+graph TD
+    OrderController --> OrderService
+    OrderService --> OrderRepository
+    OrderService --> PaymentService
+    OrderRepository --> Database
+    PaymentService --> ExternalPaymentAPI
+```
+
+重要な依存については、以下も説明してください。
+
+- 依存理由
+- データの受け渡し
+- 呼出タイミング
+
+---
+
+# Skill 4：Call Chain Tracer
+
+このSkillは特に重要です。
+
+特定の画面、API、Controller、Eventなどから処理を開始し、最終処理までコードを追跡してください。
+
+例えば、
+
+```text
+JSP
+↓
+JavaScript
+↓
+Controller
+↓
+Service
+↓
+Domain
+↓
+DAO / Repository
+↓
+SQL
+↓
+Database
+```
+
+のようなCall Chainを抽出してください。
+
+各ステップについて以下を記録してください。
+
+- File
+- Class
+- Method
+- Input
+- Output
+- 呼出先
+- 条件分岐
+- DBアクセス
+- 外部APIアクセス
+- 例外処理
+
+## 標準出力形式
+
+```yaml
+entry_point:
+  file:
+  class:
+  method:
+  input:
+
+call_chain:
+  - file:
+    class:
+    method:
+    role:
+    input:
+    output:
+
+conditions:
+  - condition:
+    meaning:
+    confidence:
+    evidence:
+
+db_access:
+  - table:
+    operation:
+    repository:
+    sql:
+
+external_api:
+  - system:
+    endpoint:
+    purpose:
+
+result:
+```
+
+---
+
+# Skill 5：Business Rule Extractor
+
+コード内に埋め込まれている業務ルールを抽出してください。
+
+特に以下を重点的に確認してください。
+
+- if / else
+- switch
+- validation
+- status
+- enum
+- constant
+- permission
+- role
+- date check
+- amount check
+- threshold
+- flag
+- state transition
+- duplicate check
+- exception condition
+
+例えば、
+
+```java
+if (status == APPROVED && amount <= limit)
+```
+
+の場合、単に
+
+「statusがAPPROVEDかつamountがlimit以下」
+
+と説明するのではなく、業務上の意味として、
+
+> 承認済みであり、かつ許容上限金額以内の場合のみ次の処理を許可する。
+
+のように整理してください。
+
+ただし、意味がコードだけでは判断できない場合は **【推定】** としてください。
+
+## 業務ルール一覧
+
+| ID | 業務ルール | 条件 | 結果 | Evidence |
+|---|---|---|---|---|
+
+可能であれば各ルールに以下のようなIDを付与してください。
+
+```text
+BR-001
+BR-002
+BR-003
+```
+
+---
+
+# Skill 6：Business Flow Generator
+
+技術的Call Chainとは別に、
+
+**業務として何が起きているのか**
+
+を整理してください。
+
+以下のようなCall Chainをそのまま業務フローとして使用しないでください。
+
+```text
+Controller
+↓
+Service
+↓
+DAO
+↓
+DB
+```
+
+業務フローは例えば、
+
+```text
+申請受付
+↓
+入力チェック
+↓
+申請可能状態確認
+↓
+審査
+↓
+承認可否判定
+↓
+審査結果登録
+↓
+通知
+```
+
+のように、業務用語で表現してください。
+
+Mermaidでも可視化してください。
+
+```mermaid
+flowchart TD
+    A[申請開始]
+    B[入力チェック]
+    C{申請可能か}
+    D[申請データ登録]
+    E[審査]
+    F{承認か}
+    G[承認]
+    H[否認]
+
+    A --> B
+    B --> C
+    C -->|Yes| D
+    C -->|No| H
+    D --> E
+    E --> F
+    F -->|Yes| G
+    F -->|No| H
+```
+
+各Business Flowについて、対応するCall Chainもリンクしてください。
+
+---
+
+# Skill 7：State Machine Analyzer
+
+Status、State、Flag、区分値などを調査してください。
+
+対象例：
+
+- status
+- statusCode
+- state
+- flag
+- kubun
+- enum
+- processStatus
+
+状態遷移を以下の形式で整理してください。
+
+| 現在状態 | 条件／操作 | 次状態 | 実装箇所 |
+|---|---|---|---|
+
+Mermaidでも表現してください。
+
+```mermaid
+stateDiagram-v2
+    Draft --> Submitted
+    Submitted --> Approved
+    Submitted --> Rejected
+    Approved --> Completed
+```
+
+状態を数値で管理している場合は、以下のような意味も可能な限り解析してください。
+
+```text
+0 = 未申請
+1 = 申請中
+2 = 承認
+3 = 否認
+```
+
+不明な場合は【未確認】としてください。
+
+---
+
+# Skill 8：Database Analyzer
+
+DBアクセスを調査してください。
+
+対象：
+
+- JDBC
+- JPA
+- Hibernate
+- MyBatis
+- SQL
+- Stored Procedure
+- ORM
+- Repository
+- DAO
+
+主要Tableについて以下を整理してください。
+
+| Table | Entity | Repository / DAO | CRUD | 使用機能 | 業務上の意味 |
+|---|---|---|---|---|---|
+
+さらに、
+
+```text
+業務機能
+↓
+Service
+↓
+Repository
+↓
+SQL
+↓
+Table
+```
+
+の対応関係を整理してください。
+
+重要なSQLについて、以下を業務的に説明してください。
+
+- 何を取得しているのか
+- 何を更新しているのか
+- なぜ必要なのか
+
+CRUD Matrixも可能であれば作成してください。
+
+| 機能 | TABLE_A | TABLE_B | TABLE_C |
+|---|---|---|---|
+| 申請 | C | R | - |
+| 審査 | R/U | R | C |
+| 取消 | U | - | U |
+
+---
+
+# Skill 9：External System Analyzer
+
+以下を検索してください。
+
+- HTTP Client
+- REST API
+- GraphQL
+- SOAP
+- SDK
+- Message Queue
+- File I/O
+- SFTP
+- Mail
+- External Database
+
+外部システムごとに整理してください。
+
+| 外部システム | 呼出元 | Input | Output | 用途 | エラー時処理 |
+|---|---|---|---|---|---|
+
+認証方法やTimeout、Retryが確認できる場合は記載してください。
+
+---
+
+# Skill 10：Error Handling Analyzer
+
+以下を調査してください。
+
+- Exception
+- Error Handling
+- Retry
+- Rollback
+- Validation Error
+- API Failure
+- DB Failure
+- Timeout
+- Transaction
+
+特に、
+
+**エラー発生後に業務状態がどうなるか**
+
+を確認してください。
+
+例：
+
+```text
+DB更新失敗
+↓
+Transaction rollback
+↓
+申請状態は変更されない
+↓
+エラー画面表示
+```
+
+---
+
+# Skill 11：Test Spec Analyzer
+
+Unit Test、Integration Test、E2E Testが存在する場合は必ず確認してください。
+
+テストコードから以下を抽出してください。
+
+- 正常系
+- 異常系
+- 境界値
+- 権限
+- 日付条件
+- 金額条件
+- Status条件
+- 業務ルール
+- 状態遷移
+
+特に、本体コードだけでは分かりにくい仕様をテストから補完してください。
+
+本体コードとテストコードで矛盾している場合は明示してください。
+
+例：
+
+```text
+【不整合】
+
+Production Code:
+amount >= 1000000
+
+Test:
+amount > 1000000
+
+境界値1,000,000の仕様に不整合が存在する可能性あり。
+```
+
+---
+
+# Skill 12：Spec-Code Mapper
+
+すべての解析結果を使用し、
+
+**業務仕様とコードの対応関係**
+
+を作成してください。
+
+以下の形式で整理してください。
+
+| 業務仕様ID | 業務仕様 | Code | SQL / DB | Test |
+|---|---|---|---|---|
+| BR-001 | 承認済みデータは再申請不可 | `ApplicationService#validate()` | - | `testAlreadyApproved()` |
+| BR-002 | 100万円以上は追加審査 | `JudgeService#judge()` | `T_APPLICATION` | `testLargeAmount()` |
+
+これにより、
+
+```text
+業務仕様
+↕
+Source Code
+↕
+SQL / Database
+↕
+Test Case
+```
+
+を追跡可能にしてください。
+
+---
+
+# Skill 13：Excel Business Flow Generator
+
+## 目的
+
+Business Flow Generatorで抽出した業務フローを、日本のシステム開発現場で使用されるExcel設計書形式の業務フロー図として出力する。
+
+Mermaidは解析・確認用の中間成果物として使用してよいが、最終成果物は可能な限りExcel上で編集可能な図形として生成する。
+
+## 基本方針
+
+業務フローを画像として貼り付けるだけではなく、可能な限り以下のExcelオブジェクトを使用する。
+
+- Shape
+- Connector
+- TextBox
+- Swimlane
+- Arrow
+- Decision
+- Start / End
+
+各オブジェクトはExcel上で個別に編集可能な状態とする。
+
+## 図形ルール
+
+### 開始／終了
+
+角丸長方形を使用する。
+
+例：
+
+```text
+申請開始
+処理終了
+```
+
+### 通常処理
+
+長方形を使用する。
+
+例：
+
+```text
+入力チェック
+申請情報登録
+審査処理
+```
+
+### 条件分岐
+
+ひし形を使用する。
+
+例：
+
+```text
+申請可能か？
+```
+
+分岐線には、以下のような条件を表示する。
+
+```text
+Yes / No
+OK / NG
+正常 / 異常
+```
+
+### 外部システム
+
+通常処理とは異なる形式で識別可能にする。
+
+### Database
+
+DBを示す専用図形、または明確にDBと分かる表記を使用する。
+
+## Swimlane
+
+業務フローに複数の担当者またはシステムが存在する場合は、Swimlane形式を優先する。
+
+例：
+
+```text
+ユーザー
+画面
+Application
+Database
+外部システム
+```
+
+処理を実行する主体ごとにLaneを分離する。
+
+## Excelレイアウト
+
+図形が重ならないように配置する。
+
+原則として、
+
+```text
+上 → 下
+```
+
+または
+
+```text
+左 → 右
+```
+
+の方向で処理を配置する。
+
+分岐が存在する場合は、
+
+```text
+正常系：メイン方向
+異常系：右側または下側
+```
+
+に配置する。
+
+線が可能な限り交差しないレイアウトを選択する。
+
+## Flow中間データ
+
+Excelを直接生成する前に、業務フローを構造化データとして確定する。
+
+例：
+
+```yaml
+flow_id: BF-001
+name: 申請業務フロー
+
+lanes:
+  - USER
+  - SCREEN
+  - APPLICATION
+  - DATABASE
+
+nodes:
+  - id: N01
+    type: start
+    lane: USER
+    text: 申請開始
+
+  - id: N02
+    type: process
+    lane: SCREEN
+    text: 入力チェック
+
+  - id: N03
+    type: decision
+    lane: APPLICATION
+    text: 申請可能か
+
+  - id: N04
+    type: process
+    lane: DATABASE
+    text: 申請情報登録
+
+edges:
+  - from: N01
+    to: N02
+
+  - from: N02
+    to: N03
+
+  - from: N03
+    to: N04
+    condition: Yes
+```
+
+この中間データを元にExcel図を生成する。
+
+## Traceability
+
+各Excel図形について、元となる実装コードを追跡可能にする。
+
+例：
+
+```text
+処理：
+申請可能判定
+
+業務ID：
+BR-003
+
+Source：
+ApplicationService.java
+
+Method：
+checkApplicable()
+```
+
+詳細情報は以下のいずれかに保持する。
+
+- 図形コメント
+- Note
+- 別SheetのMapping Table
+- 処理ID
+
+## Mapping Sheet
+
+Excel内に別Sheetとして `Flow_Mapping` を作成する。
+
+例：
+
+| Flow ID | Node ID | 業務処理 | Source File | Class | Method | Rule ID |
+|---|---|---|---|---|---|---|
+| BF-001 | N01 | 申請開始 | application.jsp | - | - | - |
+| BF-001 | N02 | 入力チェック | ApplicationValidator.java | ApplicationValidator | validate | BR-001 |
+| BF-001 | N03 | 申請可能判定 | ApplicationService.java | ApplicationService | checkApplicable | BR-003 |
+
+これにより、
+
+**Excel業務フロー図 ↔ Source Code**
+
+を追跡可能にする。
+
+## Excel出力例
+
+```text
+業務フロー.xlsx
+```
+
+Workbook構成例：
+
+```text
+00_目次
+01_システム全体
+02_申請業務フロー
+03_審査業務フロー
+04_取消業務フロー
+Flow_Mapping
+Rule_List
+```
+
+Mermaid図は必要に応じてMarkdown設計資料にも保持するが、正式な業務フロー成果物はExcel版を優先する。
+
+---
+
+# Skill 14：Design Document Generator
+
+前述の解析結果を統合し、最終設計資料を作成してください。
+
+解析中に直接最終資料を書き始めるのではなく、まず各解析結果を確定させ、その後統合してください。
+
+推奨ファイル構成：
+
+```text
+docs/
+├── 01-system-overview.md
+├── 02-architecture.md
+├── 03-module-map.md
+├── 04-dependency.md
+├── 05-entry-points.md
+├── 06-call-chains.md
+├── 07-business-flow.md
+├── 08-business-rules.md
+├── 09-state-transition.md
+├── 10-database.md
+├── 11-external-systems.md
+├── 12-error-handling.md
+├── 13-test-specification.md
+├── 14-spec-code-mapping.md
+└── 15-open-questions.md
+```
+
+さらに、業務フローについては必要に応じて以下も生成してください。
+
+```text
+excel/
+└── 業務フロー.xlsx
+```
+
+---
+
+## 4. 機能別詳細解析フォーマット
+
+主要機能について、以下の形式で整理してください。
+
+### 機能名
+
+#### 1. 業務概要
+
+この処理が業務上何を行う機能なのか説明する。
+
+#### 2. Entry Point
+
+- File:
+- Class:
+- Method:
+- URL / Event:
+
+#### 3. Input
+
+#### 4. Call Chain
+
+```text
+xxx
+↓
+xxx
+↓
+xxx
+```
+
+#### 5. 処理フロー
+
+1.
+2.
+3.
+4.
+5.
+
+#### 6. 業務ルール
+
+| Rule ID | Rule | Evidence |
+|---|---|---|
+
+#### 7. DB Read
+
+#### 8. DB Update
+
+#### 9. External API
+
+#### 10. Status Transition
+
+#### 11. Error / Exception
+
+#### 12. Transaction
+
+#### 13. Output
+
+#### 14. 関連Test
+
+#### 15. 未確認事項
+
+---
+
+## 5. Confidence管理
+
+解析結果には必要に応じてConfidenceを付与してください。
+
+```text
+High
+Medium
+Low
+```
+
+基準：
+
+### High
+
+コードから直接確認できる。
+
+### Medium
+
+複数のコードから合理的に判断できる。
+
+### Low
+
+命名や周辺処理からの推測が多い。
+
+ただし、ConfidenceがLowの場合は必ず【推定】として扱ってください。
+
+---
+
+## 6. Evidence管理
+
+業務ルールや重要仕様について、可能な限りEvidenceを構造化してください。
+
+例：
+
+```yaml
+rule_id: BR-001
+
+rule:
+  承認済み申請は再申請できない
+
+confidence:
+  high
+
+evidence:
+  - file: src/main/java/xxx/ApplicationService.java
+    class: ApplicationService
+    method: validateApplication
+    type: source_code
+
+  - file: src/test/java/xxx/ApplicationServiceTest.java
+    method: testAlreadyApproved
+    type: test
+```
+
+---
+
+## 7. 解析順序
+
+巨大なRepositoryの場合、一度にすべてを詳細解析しないでください。
+
+以下の順序を守ってください。
+
+### Phase 1：全体把握
+
+1. Repository Structure
+2. Architecture
+3. Entry Points
+4. 主要Module
+5. DB / External System
+
+### Phase 2：主要業務機能特定
+
+業務上重要と思われる主要機能を一覧化してください。
+
+例：
+
+```text
+F-001 申請
+F-002 審査
+F-003 承認
+F-004 取消
+F-005 結果照会
+```
+
+### Phase 3：Call Chain解析
+
+主要機能ごとにCall Chainを追跡してください。
+
+### Phase 4：Business Rule解析
+
+条件分岐、Status、Validationを中心に業務ルールを抽出してください。
+
+### Phase 5：Business Flow生成
+
+技術実装を業務視点に変換してください。
+
+### Phase 6：DB / State / Error解析
+
+DB、状態遷移、Transaction、Error処理を補完してください。
+
+### Phase 7：Testによる仕様補完
+
+Test Codeを使用して仕様を検証してください。
+
+### Phase 8：Spec-Code Mapping
+
+業務仕様とImplementationを紐付けてください。
+
+### Phase 9：Excel業務フロー生成
+
+Business Flowを構造化データとして確定し、Excel上で編集可能な図形として生成してください。
+
+### Phase 10：最終Document生成
+
+すべてをMarkdown設計資料として統合してください。
+
+---
+
+## 8. Skill間のデータ連携
+
+各Skillは独立した文章を生成するのではなく、可能な限り構造化された情報を次のSkillへ渡してください。
+
+基本データモデル：
+
+```yaml
+function:
+  id:
+  name:
+  description:
+
+entry_point:
+  file:
+  class:
+  method:
+
+call_chain:
+  - file:
+    class:
+    method:
+    role:
+
+business_rules:
+  - id:
+    condition:
+    business_meaning:
+    confidence:
+    evidence:
+
+business_flow:
+  flow_id:
+  nodes:
+  edges:
+  lanes:
+
+database:
+  - table:
+    operation:
+    sql:
+    source:
+
+state_transition:
+  - from:
+    condition:
+    to:
+    evidence:
+
+tests:
+  - file:
+    method:
+    verified_rule:
+
+open_questions:
+  -
+```
+
+これをSkill間の共通フォーマットとして使用してください。
+
+---
+
+## 9. 解析品質に関する禁止事項
+
+### 9.1 ファイル名だけで仕様を推測しない
+
+例：
+
+`ApprovalService.java`
+
+という名前だけを見て、
+
+「承認処理を行っている」
+
+と断定しないこと。
+
+### 9.2 Call GraphをBusiness Flowとして扱わない
+
+以下は技術フローです。
+
+```text
+Controller
+↓
+Service
+↓
+Repository
+```
+
+以下は業務フローです。
+
+```text
+申請受付
+↓
+審査
+↓
+承認判定
+↓
+結果登録
+```
+
+両者を混同しないでください。
+
+### 9.3 推測を仕様として記載しない
+
+コードから確認できないものは必ず、
+
+- 【推定】
+- 【未確認】
+
+のいずれかとして扱ってください。
+
+### 9.4 重要な条件分岐を省略しない
+
+正常系だけではなく、以下も解析してください。
+
+- Error
+- Validation
+- 権限
+- Boundary
+- Status
+- Null
+- Retry
+- Rollback
+
+### 9.5 Repository全体を無制限に読み続けない
+
+まず重要箇所を特定し、そこから深掘りしてください。
+
+探索と詳細解析を分離してください。
+
+### 9.6 巨大な一枚図を作らない
+
+システム全体の情報を一枚の巨大なフロー図に詰め込まないでください。
+
+原則として、主要業務機能ごとに以下を分けて生成してください。
+
+1. 業務フロー図
+2. Call Chain図
+3. State遷移図
+4. DB / External System図
+
+---
+
+## 10. 推奨する図の種類
+
+### 10.1 システム全体構成図
+
+システムの主要コンポーネントと接続関係を示す。
+
+### 10.2 業務フロー図
+
+業務用語を使用し、処理の開始から終了までの業務的な流れを示す。
+
+### 10.3 Call Chain図
+
+画面、Controller、Service、Repository、SQL、DBなどの技術的な呼出し関係を示す。
+
+### 10.4 業務 + コード対応図
+
+業務処理と実装メソッドの対応を示す。
+
+### 10.5 条件分岐詳細図
+
+複雑なif / else / switch / validationを業務的な判断フローとして可視化する。
+
+### 10.6 State遷移図
+
+Status / State / Flagの変更条件と遷移先を示す。
+
+### 10.7 DBアクセス図
+
+業務機能とService / Repository / SQL / Tableの関係を示す。
+
+---
+
+## 11. 最終成果物
+
+最終的に以下を生成してください。
+
+1. システム概要
+2. システム構成
+3. ディレクトリ／ファイル構成
+4. アーキテクチャ
+5. モジュール依存関係
+6. Entry Point一覧
+7. 機能一覧
+8. Call Chain一覧
+9. 業務フロー
+10. 機能別詳細処理
+11. 業務ルール一覧
+12. Status / State遷移
+13. DB・Entity・Repository関係
+14. CRUD Matrix
+15. 外部システム連携
+16. Error / Exception / Transaction
+17. Testから抽出した仕様
+18. 業務仕様 ↔ Code ↔ SQL ↔ Test対応表
+19. Excel業務フロー図
+20. 不整合一覧
+21. 未確認事項
+22. 追加調査が必要な箇所
+
+---
+
+## 12. 最終目標
+
+最終成果物は、コードを読んだことがないエンジニアが資料だけを読んでも、
+
+**このシステムにはどのような業務機能が存在し、その処理がどこから始まり、どのモジュールを通り、どの業務判断を行い、どのDBや外部システムにアクセスし、どの状態へ遷移して、最終的にどうなるのか**
+
+を追跡できるレベルにしてください。
+
+さらに、各業務仕様について、
+
+```text
+業務仕様
+↓
+実装コード
+↓
+SQL / DB
+↓
+Test
+↓
+Excel業務フロー
+```
+
+まで逆引きできる状態を目標としてください。
+
+このRepositoryを解析する際は、いきなり最終ドキュメントを生成せず、
+
+**全体把握 → 重要機能特定 → Call Chain → Business Rule → Business Flow → DB／State／Test → Spec-Code Mapping → Excel業務フロー → Document**
+
+の順序で進めてください。
