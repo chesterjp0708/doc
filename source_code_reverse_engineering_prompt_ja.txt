@@ -1,1372 +1,1194 @@
-# ソースコードからシステム設計を逆生成するための統合プロンプト
+システム解析・設計書自動生成 指示書
 
-## 1. 役割
+あなたは、日本のSIer・受託開発現場で基本設計書、詳細設計書、影響調査資料を作成するシニアシステムエンジニアです。
 
-あなたは、既存システムのソースコードを解析し、設計情報をリバースエンジニアリングするシニアシステムアーキテクトです。
+対象システムのソースコード、設定ファイル、画面ファイル、SQL、ルーティング定義、各種ドキュメントを横断的に解析し、システム構造・依存関係・業務フロー・処理フロー・画面遷移・詳細業務ロジックを逆算してください。
 
-このプロジェクトについて、ソースコード、設定ファイル、SQL、テストコード、ビルド設定などを根拠として解析し、現在のシステム構成・依存関係・業務フロー・業務ロジックを整理してください。
+最終成果物は、日本のシステム開発現場でそのままレビューに使用できるレベルの設計資料としてください。
 
-目的は、既存システムを理解していないエンジニアでも、この資料を読むことで以下を理解できる状態にすることです。
+単なるソースコード要約ではなく、
 
-- システム全体の構成
-- 各ファイル／モジュールの役割
-- モジュール間の依存関係
-- 処理の入口から出口までの流れ
-- DB・外部システムとの関係
-- 業務上どのような判断・制御が行われているか
-- 業務仕様と実装コードの対応関係
-- テストコードと業務仕様の対応関係
+「このシステムが何をしているのか」
+「どの画面からどの処理が呼ばれるのか」
+「どのクラス・API・DBが関係するのか」
+「ユーザー操作によって何が起きるのか」
+「どの条件で処理が分岐するのか」
 
-最終的には、
+を構造化してください。
 
-**業務仕様 ↔ ソースコード ↔ DB／SQL ↔ テストコード**
+⸻
 
-を相互に追跡できる設計資料を作成することを目標とします。
+1. 最終目的
 
----
+以下をソースコードから逆解析して作成してください。
 
-## 2. 基本原則
+1. システム全体構成
+2. ディレクトリ・ファイル構成
+3. モジュール構成
+4. クラス・コンポーネント依存関係
+5. 外部システム依存関係
+6. DB依存関係
+7. 業務機能一覧
+8. 画面一覧
+9. API一覧
+10. 業務フロー図
+11. 処理フロー図
+12. 画面遷移図
+13. 画面遷移定義一覧
+14. 詳細業務ロジック
+15. コード根拠一覧
+16. 推定・未確認事項一覧
 
-コードから確認できる事実と推測を必ず明確に分けてください。
+最終的に Word（.docx）形式の設計資料としてまとめてください。
 
-以下の3種類を使用してください。
+⸻
 
-- **【確定】** ソースコードから直接確認できる内容
-- **【推定】** 複数のコード・命名・処理関係から合理的に推定できる内容
-- **【未確認】** コードだけでは判断できない内容
+2. 解析方針
 
-推測した内容を事実として記述しないでください。
-
-ファイル名、クラス名、メソッド名だけで処理内容を判断せず、可能な限り実装内容を確認してください。
-
-重要な結論には必ず根拠を付与してください。
-
-根拠として以下を使用してください。
-
-- ファイルパス
-- クラス名
-- メソッド／関数名
-- SQL
-- Table
-- 設定値
-- API
-- Enum
-- Constant
-- Test Case
-
-記述例：
-
-```text
-【確定】
-申請情報の登録処理は以下で実装されている。
-
-src/main/java/xxx/service/ApplicationService.java
-→ ApplicationService#createApplication()
-```
-
----
-
-## 3. 解析アーキテクチャ
-
-本解析は、一つの巨大な処理として実行するのではなく、以下の解析Skill／解析フェーズに分けて実行してください。
-
-```text
-Repo Structure Analyzer
-        ↓
-Entry Point Analyzer
-        ↓
-Dependency Analyzer
-        ↓
-Call Chain Tracer
-        ↓
-Business Rule Extractor
-        ↓
-Business Flow Generator
-        ↓
-State Machine Analyzer
-        ↓
-Database Analyzer
-        ↓
-External System Analyzer
-        ↓
-Error Handling Analyzer
-        ↓
-Test Spec Analyzer
-        ↓
-Spec-Code Mapper
-        ↓
-Excel Business Flow Generator
-        ↓
-Design Document Generator
-```
-
-必要に応じて一部の解析を並列実行して構いません。
-
-ただし、最終的には各解析結果を統合してください。
-
----
-
-# Skill 1：Repo Structure Analyzer
-
-## 目的
-
-Repository全体を確認し、システムの大まかな構造を把握する。
-
-## 調査対象
-
-以下を特定してください。
-
-- Application Entry Point
-- Frontend
-- Backend
-- Controller / Handler
-- Service / UseCase
-- Domain
-- Repository / DAO
-- Database
-- Batch
-- External API
-- Authentication / Authorization
-- Configuration
-- Common / Utility
-- Middleware
-- Test
-- Build
-- Deploy
-- CI/CD
-
-生成物や外部ライブラリは原則として解析対象外としてください。
-
-例：
-
-- node_modules
-- vendor
-- target
-- build
-- dist
-- .git
-- generated files
-
-## 出力
-
-### ディレクトリ構成
-
-```text
-project
-├── frontend
-├── backend
-│   ├── controller
-│   ├── service
-│   ├── domain
-│   └── repository
-├── database
-└── config
-```
-
-### 主要ファイル一覧
-
-| Path | 種別 | 役割 | 関連モジュール | 重要度 |
-|---|---|---|---|---|
-
-すべてのファイルを機械的に列挙する必要はありません。
-
-業務理解に重要なファイルを優先してください。
-
----
-
-# Skill 2：Entry Point Analyzer
-
-システム内で処理が開始される箇所を洗い出してください。
-
-例：
-
-- HTTP Request
-- REST API
-- Web画面
-- JSP / HTML Form
-- JavaScript Event
-- Batch
-- Scheduler
-- Message Queue
-- Webhook
-- CLI
-- Event Listener
-
-各Entry Pointについて以下を整理してください。
-
-| Entry Point | 種別 | Input | 最初の処理 | 関連機能 |
-|---|---|---|---|---|
-
-各Entry Pointから可能な限り、
-
-```text
-Input
-↓
-Controller / Handler
-↓
-Service
-↓
-Domain
-↓
-Repository
-↓
-DB / External API
-↓
-Response / Output
-```
-
-まで追跡してください。
-
----
-
-# Skill 3：Dependency Analyzer
-
-モジュール、クラス、サービス間の依存関係を解析してください。
-
-以下を確認してください。
-
-- import
-- dependency injection
-- interface / implementation
-- inheritance
-- function call
-- event
-- callback
-- middleware
-- API call
-- database access
-- message queue
-- shared state
-- common utility
-
-単純なimport一覧ではなく、
-
-**実際に処理上どのモジュールがどのモジュールへ依存しているのか**
-
-を整理してください。
-
-Mermaidで可視化してください。
-
-```mermaid
-graph TD
-    OrderController --> OrderService
-    OrderService --> OrderRepository
-    OrderService --> PaymentService
-    OrderRepository --> Database
-    PaymentService --> ExternalPaymentAPI
-```
-
-重要な依存については、以下も説明してください。
-
-- 依存理由
-- データの受け渡し
-- 呼出タイミング
-
----
-
-# Skill 4：Call Chain Tracer
-
-このSkillは特に重要です。
-
-特定の画面、API、Controller、Eventなどから処理を開始し、最終処理までコードを追跡してください。
+解析はファイル単位ではなく、機能単位・業務単位で行ってください。
 
 例えば、
 
-```text
+画面
+
+↓
+
+JavaScript / TypeScript
+
+↓
+
+Controller / Handler
+
+↓
+
+Service
+
+↓
+
+Repository / DAO
+
+↓
+
+Database
+
+↓
+
+外部API
+
+という一連の処理を1つの業務フローとして追跡してください。
+
+単純にクラス一覧やファイル一覧を作成して終わらないでください。
+
+⸻
+
+3. 最初にシステム全体を把握する
+
+まず以下を確認してください。
+
+* 使用言語
+* フレームワーク
+* ビルドツール
+* Webフレームワーク
+* DB
+* ORM
+* テンプレートエンジン
+* JavaScript / TypeScriptフレームワーク
+* API形式
+* 認証方式
+* セッション管理方式
+* 外部システム
+* バッチ処理
+* ジョブ
+* メッセージキュー
+* ファイル連携
+* 設定ファイル
+* 環境別設定
+
+例：
+
+* Java
+* Spring
+* Spring MVC
+* Terasoluna
+* JSP
+* Thymeleaf
+* Vue
+* React
+* TypeScript
+* Go
+* C#
+* SQL
+* PostgreSQL
+* Oracle
+* MySQL
+* REST API
+* GraphQL
+
+⸻
+
+4. ディレクトリ・ファイル構成解析
+
+プロジェクト全体を解析し、主要ディレクトリの役割を整理してください。
+
+例：
+
+src/main/java
+→ Javaアプリケーションロジック
+
+controller
+→ HTTPリクエスト受付
+
+service
+→ 業務ロジック
+
+repository
+→ DBアクセス
+
+src/main/resources
+→ 設定・SQL・テンプレート
+
+src/main/webapp
+→ JSP、JavaScript、CSS
+
+frontend
+→ フロントエンド
+
+config
+→ 各種設定
+
+必要に応じてツリー形式で整理してください。
+
+ただし、全ファイルを機械的に列挙せず、重要な構造を中心にまとめてください。
+
+⸻
+
+5. モジュール依存関係
+
+以下の関係を分析してください。
+
+* Controller → Service
+* Service → Repository
+* Service → 外部API
+* Repository → DB
+* Component → Component
+* Screen → API
+* API → Service
+* Batch → Service
+* 共通クラスへの依存
+
+循環依存がある場合は明示してください。
+
+⸻
+
+6. 業務機能単位に分類
+
+コードを業務機能単位に分類してください。
+
+例：
+
+認証
+
+* ログイン
+* ログアウト
+* パスワード変更
+
+顧客管理
+
+* 顧客検索
+* 顧客一覧
+* 顧客詳細
+* 顧客登録
+* 顧客更新
+* 顧客削除
+
+申請管理
+
+* 申請入力
+* 申請確認
+* 申請登録
+* 承認
+* 差戻し
+
+機能名はクラス名だけでなく、実際の処理内容から判断してください。
+
+⸻
+
+7. 画面一覧作成
+
+JSP、HTML、Thymeleaf、Vue、React、テンプレート等から画面を抽出してください。
+
+各画面について以下を整理してください。
+
+項目	内容
+画面ID	SCR-xxx
+画面名	○○画面
+ファイル	xxx.jsp
+URL	/xxx
+Controller	XxxController
+主な機能	検索・登録など
+備考	推定情報など
+
+画面IDが既存コード・設計書に存在する場合はそれを使用してください。
+
+存在しない場合は、
+
+TMP-SCR-001
+
+のような仮IDを割り当ててください。
+
+⸻
+
+8. 画面遷移解析
+
+画面遷移を解析する際は、以下を必ず確認してください。
+
+* href
+* form action
+* button
+* submit
+* onclick
+* addEventListener
+* JavaScript関数
+* TypeScript関数
+* fetch
+* axios
+* Router
+* redirect
+* forward
+* Controller戻り値
+* ViewResolver
+* GET Mapping
+* POST Mapping
+* RequestMapping
+* window.location
+* location.href
+* history
+* hidden parameter
+* session
+* request parameter
+
+例：
+
+customerSearch.jsp
+
+↓
+
+検索ボタン
+
+↓
+
+search()
+
+↓
+
+POST /customer/search
+
+↓
+
+CustomerController.search()
+
+↓
+
+customerList.jsp
+
+であれば、
+
+顧客検索画面
+↓
+「検索ボタン押下」
+↓
+顧客一覧画面
+
+と判断してください。
+
+⸻
+
+9. 画面遷移定義一覧
+
+必ず以下の形式の一覧を作成してください。
+
+From画面	操作・イベント	To画面	Controller/API	根拠	信頼度
+
+例：
+
+| SCR-001 ログイン | ログインボタン押下 | SCR-010 メニュー | POST /login | login.jsp / LoginController | 確定 |
+
+⸻
+
+10. 業務フロー解析
+
+業務フローは、
+
+「ユーザーが何をするか」
+
+を起点にしてください。
+
+技術的なクラス呼び出しだけではなく、業務として説明してください。
+
+例：
+
+ユーザー
+↓
+顧客検索条件入力
+↓
+検索ボタン押下
+↓
+システムが入力チェック
+↓
+DBから顧客情報検索
+↓
+検索結果表示
+↓
+顧客選択
+↓
+顧客詳細表示
+
+その後、対応する技術処理として、
+
 JSP
 ↓
-JavaScript
-↓
 Controller
-↓
-Service
-↓
-Domain
-↓
-DAO / Repository
-↓
-SQL
-↓
-Database
-```
-
-のようなCall Chainを抽出してください。
-
-各ステップについて以下を記録してください。
-
-- File
-- Class
-- Method
-- Input
-- Output
-- 呼出先
-- 条件分岐
-- DBアクセス
-- 外部APIアクセス
-- 例外処理
-
-## 標準出力形式
-
-```yaml
-entry_point:
-  file:
-  class:
-  method:
-  input:
-
-call_chain:
-  - file:
-    class:
-    method:
-    role:
-    input:
-    output:
-
-conditions:
-  - condition:
-    meaning:
-    confidence:
-    evidence:
-
-db_access:
-  - table:
-    operation:
-    repository:
-    sql:
-
-external_api:
-  - system:
-    endpoint:
-    purpose:
-
-result:
-```
-
----
-
-# Skill 5：Business Rule Extractor
-
-コード内に埋め込まれている業務ルールを抽出してください。
-
-特に以下を重点的に確認してください。
-
-- if / else
-- switch
-- validation
-- status
-- enum
-- constant
-- permission
-- role
-- date check
-- amount check
-- threshold
-- flag
-- state transition
-- duplicate check
-- exception condition
-
-例えば、
-
-```java
-if (status == APPROVED && amount <= limit)
-```
-
-の場合、単に
-
-「statusがAPPROVEDかつamountがlimit以下」
-
-と説明するのではなく、業務上の意味として、
-
-> 承認済みであり、かつ許容上限金額以内の場合のみ次の処理を許可する。
-
-のように整理してください。
-
-ただし、意味がコードだけでは判断できない場合は **【推定】** としてください。
-
-## 業務ルール一覧
-
-| ID | 業務ルール | 条件 | 結果 | Evidence |
-|---|---|---|---|---|
-
-可能であれば各ルールに以下のようなIDを付与してください。
-
-```text
-BR-001
-BR-002
-BR-003
-```
-
----
-
-# Skill 6：Business Flow Generator
-
-技術的Call Chainとは別に、
-
-**業務として何が起きているのか**
-
-を整理してください。
-
-以下のようなCall Chainをそのまま業務フローとして使用しないでください。
-
-```text
-Controller
-↓
-Service
-↓
-DAO
-↓
-DB
-```
-
-業務フローは例えば、
-
-```text
-申請受付
-↓
-入力チェック
-↓
-申請可能状態確認
-↓
-審査
-↓
-承認可否判定
-↓
-審査結果登録
-↓
-通知
-```
-
-のように、業務用語で表現してください。
-
-Mermaidでも可視化してください。
-
-```mermaid
-flowchart TD
-    A[申請開始]
-    B[入力チェック]
-    C{申請可能か}
-    D[申請データ登録]
-    E[審査]
-    F{承認か}
-    G[承認]
-    H[否認]
-
-    A --> B
-    B --> C
-    C -->|Yes| D
-    C -->|No| H
-    D --> E
-    E --> F
-    F -->|Yes| G
-    F -->|No| H
-```
-
-各Business Flowについて、対応するCall Chainもリンクしてください。
-
----
-
-# Skill 7：State Machine Analyzer
-
-Status、State、Flag、区分値などを調査してください。
-
-対象例：
-
-- status
-- statusCode
-- state
-- flag
-- kubun
-- enum
-- processStatus
-
-状態遷移を以下の形式で整理してください。
-
-| 現在状態 | 条件／操作 | 次状態 | 実装箇所 |
-|---|---|---|---|
-
-Mermaidでも表現してください。
-
-```mermaid
-stateDiagram-v2
-    Draft --> Submitted
-    Submitted --> Approved
-    Submitted --> Rejected
-    Approved --> Completed
-```
-
-状態を数値で管理している場合は、以下のような意味も可能な限り解析してください。
-
-```text
-0 = 未申請
-1 = 申請中
-2 = 承認
-3 = 否認
-```
-
-不明な場合は【未確認】としてください。
-
----
-
-# Skill 8：Database Analyzer
-
-DBアクセスを調査してください。
-
-対象：
-
-- JDBC
-- JPA
-- Hibernate
-- MyBatis
-- SQL
-- Stored Procedure
-- ORM
-- Repository
-- DAO
-
-主要Tableについて以下を整理してください。
-
-| Table | Entity | Repository / DAO | CRUD | 使用機能 | 業務上の意味 |
-|---|---|---|---|---|---|
-
-さらに、
-
-```text
-業務機能
 ↓
 Service
 ↓
 Repository
 ↓
-SQL
+DB
+
+を関連付けてください。
+
+⸻
+
+11. 処理フロー解析
+
+重要処理については詳細な処理フローを作成してください。
+
+例：
+
+開始
+
 ↓
-Table
-```
 
-の対応関係を整理してください。
+リクエスト受付
 
-重要なSQLについて、以下を業務的に説明してください。
-
-- 何を取得しているのか
-- 何を更新しているのか
-- なぜ必要なのか
-
-CRUD Matrixも可能であれば作成してください。
-
-| 機能 | TABLE_A | TABLE_B | TABLE_C |
-|---|---|---|---|
-| 申請 | C | R | - |
-| 審査 | R/U | R | C |
-| 取消 | U | - | U |
-
----
-
-# Skill 9：External System Analyzer
-
-以下を検索してください。
-
-- HTTP Client
-- REST API
-- GraphQL
-- SOAP
-- SDK
-- Message Queue
-- File I/O
-- SFTP
-- Mail
-- External Database
-
-外部システムごとに整理してください。
-
-| 外部システム | 呼出元 | Input | Output | 用途 | エラー時処理 |
-|---|---|---|---|---|---|
-
-認証方法やTimeout、Retryが確認できる場合は記載してください。
-
----
-
-# Skill 10：Error Handling Analyzer
-
-以下を調査してください。
-
-- Exception
-- Error Handling
-- Retry
-- Rollback
-- Validation Error
-- API Failure
-- DB Failure
-- Timeout
-- Transaction
-
-特に、
-
-**エラー発生後に業務状態がどうなるか**
-
-を確認してください。
-
-例：
-
-```text
-DB更新失敗
 ↓
-Transaction rollback
+
+入力値検証
+
 ↓
-申請状態は変更されない
+
+入力エラー？
+
+Yes
+→ エラー画面表示
+
+No
 ↓
-エラー画面表示
-```
 
----
+DB検索
 
-# Skill 11：Test Spec Analyzer
+↓
 
-Unit Test、Integration Test、E2E Testが存在する場合は必ず確認してください。
+データ存在？
 
-テストコードから以下を抽出してください。
+No
+→ 0件メッセージ
 
-- 正常系
-- 異常系
-- 境界値
-- 権限
-- 日付条件
-- 金額条件
-- Status条件
-- 業務ルール
-- 状態遷移
+Yes
+↓
 
-特に、本体コードだけでは分かりにくい仕様をテストから補完してください。
+一覧生成
 
-本体コードとテストコードで矛盾している場合は明示してください。
+↓
+
+画面表示
+
+↓
+
+終了
+
+例外処理も可能な限り含めてください。
+
+⸻
+
+12. 詳細業務ロジック
+
+Service、Domain、UseCase等の処理を解析し、詳細業務ロジックを自然言語で説明してください。
+
+以下を特に重視してください。
+
+* 入力条件
+* 必須チェック
+* 範囲チェック
+* 状態チェック
+* 権限チェック
+* DB検索条件
+* 登録条件
+* 更新条件
+* 削除条件
+* 排他制御
+* トランザクション
+* エラー条件
+* 例外処理
+* 分岐条件
+* 計算処理
+* ステータス遷移
+
+コードをそのまま日本語化するのではなく、
+
+「なぜこの処理が必要なのか」
+
+が分かる形で説明してください。
+
+⸻
+
+13. 推定情報の扱い
+
+コードから確認できない内容を断定しないでください。
+
+以下の3段階に分類してください。
+
+確定
+
+コード上で直接確認できる。
+
+推定
+
+複数のコードや命名から高い確率で判断できる。
+
+未確認
+
+現時点では判断できない。
+
+推定の場合は、必ず推定理由を記載してください。
+
+⸻
+
+14. 図表作成の基本方針
+
+業務フロー図、処理フロー図、画面遷移図、システム構成図は、
+
+Markdown
+Mermaid
+PlantUML
+ASCII Art
+
+を最終成果物として使用しないでください。
+
+これらは内部生成・中間表現として使用しても構いませんが、最終成果物は図として生成してください。
+
+⸻
+
+15. Wordに入れる図の生成方式
+
+図は原則としてSVG形式で生成してください。
+
+処理順：
+
+コード解析
+
+↓
+
+構造化データ生成
+
+↓
+
+レイアウト計算
+
+↓
+
+SVG生成
+
+↓
+
+Wordに挿入
+
+Word上で複雑なオートシェイプを直接生成することは優先しません。
+
+SVGをWordへ挿入し、日本の設計書として見やすい品質を優先してください。
+
+⸻
+
+16. SVG作成ルール
+
+SVGは以下の条件を満たしてください。
+
+* ベクター形式
+* 文字が読める
+* A4横を基本とする
+* 必要ならA3横相当
+* 小さすぎる文字を使用しない
+* 線が重ならない
+* 矢印がノードを貫通しない
+* ノード同士が重ならない
+* 過剰な装飾をしない
+* 白背景
+* 業務資料向け
+* 印刷可能
+* PDF化しても判読可能
+
+基本的に日本企業のシステム設計書の見た目を意識してください。
+
+⸻
+
+17. 画面遷移図デザイン
+
+画面遷移図では各画面を矩形で表現してください。
+
+各ノードには必ず、
+
+画面ID
+
+画面名
+
+を表示してください。
 
 例：
 
-```text
-【不整合】
+┌──────────────┐
+│ SCR-001      │
+│ ログイン画面 │
+└──────────────┘
 
-Production Code:
-amount >= 1000000
+実際の成果物ではこのASCII表現ではなくSVGの矩形を使用してください。
 
-Test:
-amount > 1000000
+⸻
 
-境界値1,000,000の仕様に不整合が存在する可能性あり。
-```
+18. 遷移矢印
 
----
+画面間は必ずコネクタ・矢印で接続してください。
 
-# Skill 12：Spec-Code Mapper
-
-すべての解析結果を使用し、
-
-**業務仕様とコードの対応関係**
-
-を作成してください。
-
-以下の形式で整理してください。
-
-| 業務仕様ID | 業務仕様 | Code | SQL / DB | Test |
-|---|---|---|---|---|
-| BR-001 | 承認済みデータは再申請不可 | `ApplicationService#validate()` | - | `testAlreadyApproved()` |
-| BR-002 | 100万円以上は追加審査 | `JudgeService#judge()` | `T_APPLICATION` | `testLargeAmount()` |
-
-これにより、
-
-```text
-業務仕様
-↕
-Source Code
-↕
-SQL / Database
-↕
-Test Case
-```
-
-を追跡可能にしてください。
-
----
-
-# Skill 13：Excel Business Flow Generator
-
-## 目的
-
-Business Flow Generatorで抽出した業務フローを、日本のシステム開発現場で使用されるExcel設計書形式の業務フロー図として出力する。
-
-Mermaidは解析・確認用の中間成果物として使用してよいが、最終成果物は可能な限りExcel上で編集可能な図形として生成する。
-
-## 基本方針
-
-業務フローを画像として貼り付けるだけではなく、可能な限り以下のExcelオブジェクトを使用する。
-
-- Shape
-- Connector
-- TextBox
-- Swimlane
-- Arrow
-- Decision
-- Start / End
-
-各オブジェクトはExcel上で個別に編集可能な状態とする。
-
-## 図形ルール
-
-### 開始／終了
-
-角丸長方形を使用する。
+矢印上にはイベント名を記載してください。
 
 例：
 
-```text
-申請開始
-処理終了
-```
+ログインボタン押下
 
-### 通常処理
+検索ボタン押下
 
-長方形を使用する。
+登録ボタン押下
 
-例：
+戻る
 
-```text
-入力チェック
-申請情報登録
-審査処理
-```
+キャンセル
 
-### 条件分岐
+更新
 
-ひし形を使用する。
+削除
 
-例：
+タイムアウト
 
-```text
-申請可能か？
-```
+ログアウト
 
-分岐線には、以下のような条件を表示する。
+エラー
 
-```text
-Yes / No
-OK / NG
-正常 / 異常
-```
+単純に画面A→画面Bとだけ記載しないでください。
 
-### 外部システム
+⸻
 
-通常処理とは異なる形式で識別可能にする。
+19. 画面遷移図の方向
 
-### Database
+基本方向：
 
-DBを示す専用図形、または明確にDBと分かる表記を使用する。
-
-## Swimlane
-
-業務フローに複数の担当者またはシステムが存在する場合は、Swimlane形式を優先する。
-
-例：
-
-```text
-ユーザー
-画面
-Application
-Database
-外部システム
-```
-
-処理を実行する主体ごとにLaneを分離する。
-
-## Excelレイアウト
-
-図形が重ならないように配置する。
-
-原則として、
-
-```text
-上 → 下
-```
+左 → 右
 
 または
 
-```text
-左 → 右
-```
+上 → 下
 
-の方向で処理を配置する。
+としてください。
 
-分岐が存在する場合は、
+同じ図の中で方向を頻繁に変更しないでください。
 
-```text
-正常系：メイン方向
-異常系：右側または下側
-```
+戻る処理等は逆方向矢印を使用して構いません。
 
-に配置する。
+⸻
 
-線が可能な限り交差しないレイアウトを選択する。
+20. 画面数が多い場合
 
-## Flow中間データ
+1ページに無理に全画面を配置しないでください。
 
-Excelを直接生成する前に、業務フローを構造化データとして確定する。
+以下に分割してください。
 
-例：
+全体画面遷移図
 
-```yaml
-flow_id: BF-001
-name: 申請業務フロー
+主要画面だけを表示。
 
-lanes:
-  - USER
-  - SCREEN
-  - APPLICATION
-  - DATABASE
-
-nodes:
-  - id: N01
-    type: start
-    lane: USER
-    text: 申請開始
-
-  - id: N02
-    type: process
-    lane: SCREEN
-    text: 入力チェック
-
-  - id: N03
-    type: decision
-    lane: APPLICATION
-    text: 申請可能か
-
-  - id: N04
-    type: process
-    lane: DATABASE
-    text: 申請情報登録
-
-edges:
-  - from: N01
-    to: N02
-
-  - from: N02
-    to: N03
-
-  - from: N03
-    to: N04
-    condition: Yes
-```
-
-この中間データを元にExcel図を生成する。
-
-## Traceability
-
-各Excel図形について、元となる実装コードを追跡可能にする。
+機能別画面遷移図
 
 例：
 
-```text
-処理：
-申請可能判定
+* 認証系
+* 顧客管理
+* 申請管理
+* 管理者機能
+* マスタ管理
 
-業務ID：
-BR-003
+図を縮小しすぎて文字が読めなくなることは禁止します。
 
-Source：
-ApplicationService.java
+⸻
+
+21. 業務フロー図デザイン
+
+業務フロー図はスイムレーン形式を優先してください。
+
+例：
+
+ユーザー	Web画面	Controller	Service	DB
+
+各処理主体ごとにレーンを分割してください。
+
+⸻
+
+22. 業務フロー図の図形
+
+以下のルールを使用してください。
+
+開始・終了
+→ 角丸矩形または楕円
+
+処理
+→ 長方形
+
+ユーザー操作
+→ 角丸長方形
+
+条件分岐
+→ ひし形
+
+DB
+→ データベース図形
+
+外部システム
+→ 独立した矩形
+
+⸻
+
+23. 条件分岐
+
+条件分岐はひし形で表現してください。
+
+例：
+
+「対象データが存在する？」
+
+Yes
+↓
+詳細処理
+
+No
+↓
+エラー処理
+
+矢印上には、
+
+Yes
+No
+
+または
+
+あり
+なし
+
+を明記してください。
+
+⸻
+
+24. 日本の設計書らしい見た目
+
+見た目は、
+
+Webデザイン
+
+プレゼン資料
+
+マーケティング資料
+
+ではなく、
+
+日本のSIerの基本設計書
+
+を意識してください。
+
+原則：
+
+* 白背景
+* 黒またはグレーの線
+* 控えめな色
+* 明確な罫線
+* 四角形中心
+* 装飾を抑える
+* 可読性を最優先
+* 図形サイズを揃える
+* 文字位置を揃える
+* フォントサイズを統一する
+
+カラフルすぎるデザインは禁止します。
+
+⸻
+
+25. Word文書構成
+
+最終Wordは以下のような構成にしてください。
+
+1. 文書概要
+
+* 文書目的
+* 対象システム
+* 解析対象
+* 前提条件
+
+2. システム概要
+
+* システム説明
+* 使用技術
+* 全体構成図
+
+3. プロジェクト構成
+
+* ディレクトリ構成
+* モジュール構成
+
+4. システム依存関係
+
+* モジュール依存関係
+* 外部システム
+* DB
+
+5. 業務機能一覧
+
+6. 画面一覧
+
+7. 画面遷移図
+
+7.1 全体
+
+SVG図を挿入
+
+7.2 認証系
+
+SVG図を挿入
+
+7.3 顧客管理
+
+SVG図を挿入
+
+7.4 その他機能
+
+SVG図を挿入
+
+8. 画面遷移定義一覧
+
+9. 業務フロー図
+
+各主要業務ごとにSVG図を挿入
+
+10. 処理フロー図
+
+11. 詳細業務ロジック
+
+12. コード根拠一覧
+
+13. 推定・未確認事項
+
+⸻
+
+26. Wordレイアウト
+
+ページ：
+
+A4
+
+基本：
+横向き
+
+ただし文章中心ページは縦向きでも可。
+
+図が多いページでは横向きを使用してください。
+
+余白：
+
+狭め
+
+図：
+
+中央配置
+
+図タイトル：
+
+図7-1 ログイン関連画面遷移図
+
+のように番号を付けてください。
+
+⸻
+
+27. SVGをWordへ挿入する際のルール
+
+SVGは単純に貼り付けるだけではなく、
+
+* ページ幅に合わせる
+* アスペクト比を維持する
+* 文字を潰さない
+* 図番号を付ける
+* 図タイトルを付ける
+
+こと。
+
+1ページに収まらない場合は縮小しすぎず、図を分割してください。
+
+⸻
+
+28. Word生成が困難な場合
+
+Wordの図形を直接操作できないことを理由に、
+
+図をテキストで代替してはいけません。
+
+以下の方式を使用してください。
+
+SVG生成
+
+↓
+
+Wordへ画像として挿入
+
+↓
+
+図タイトル追加
+
+↓
+
+説明追加
+
+最終Word上では、設計書の図として自然に見える状態にしてください。
+
+⸻
+
+29. 禁止事項
+
+以下は禁止します。
+
+* Mermaidコードだけ提出
+* PlantUMLコードだけ提出
+* ASCII図だけ提出
+* 表だけで画面遷移図を代用
+* ファイル一覧だけ作って解析終了
+* クラス名だけ並べる
+* コードのコメントだけを要約
+* 根拠なしで業務仕様を断定
+* 全画面を1枚に無理やり詰め込む
+* 文字が読めないほど縮小する
+* 矢印が大量に交差する
+* ノードが重なる
+* 色を大量使用する
+* プレゼン資料風にする
+
+⸻
+
+30. コード根拠
+
+重要な分析結果について、根拠コードを記録してください。
+
+例えば：
+
+業務機能：
+顧客検索
+
+画面：
+customerSearch.jsp
+
+Controller：
+CustomerController.java
 
 Method：
-checkApplicable()
-```
+search()
 
-詳細情報は以下のいずれかに保持する。
+Service：
+CustomerService.searchCustomer()
 
-- 図形コメント
-- Note
-- 別SheetのMapping Table
-- 処理ID
+Repository：
+CustomerRepository.findByCondition()
 
-## Mapping Sheet
+SQL：
+customer_search.sql
 
-Excel内に別Sheetとして `Flow_Mapping` を作成する。
+のように追跡してください。
 
-例：
+⸻
 
-| Flow ID | Node ID | 業務処理 | Source File | Class | Method | Rule ID |
-|---|---|---|---|---|---|---|
-| BF-001 | N01 | 申請開始 | application.jsp | - | - | - |
-| BF-001 | N02 | 入力チェック | ApplicationValidator.java | ApplicationValidator | validate | BR-001 |
-| BF-001 | N03 | 申請可能判定 | ApplicationService.java | ApplicationService | checkApplicable | BR-003 |
+31. トレーサビリティ
 
-これにより、
+可能な限り、
 
-**Excel業務フロー図 ↔ Source Code**
+画面
 
-を追跡可能にする。
-
-## Excel出力例
-
-```text
-業務フロー.xlsx
-```
-
-Workbook構成例：
-
-```text
-00_目次
-01_システム全体
-02_申請業務フロー
-03_審査業務フロー
-04_取消業務フロー
-Flow_Mapping
-Rule_List
-```
-
-Mermaid図は必要に応じてMarkdown設計資料にも保持するが、正式な業務フロー成果物はExcel版を優先する。
-
----
-
-# Skill 14：Design Document Generator
-
-前述の解析結果を統合し、最終設計資料を作成してください。
-
-解析中に直接最終資料を書き始めるのではなく、まず各解析結果を確定させ、その後統合してください。
-
-推奨ファイル構成：
-
-```text
-docs/
-├── 01-system-overview.md
-├── 02-architecture.md
-├── 03-module-map.md
-├── 04-dependency.md
-├── 05-entry-points.md
-├── 06-call-chains.md
-├── 07-business-flow.md
-├── 08-business-rules.md
-├── 09-state-transition.md
-├── 10-database.md
-├── 11-external-systems.md
-├── 12-error-handling.md
-├── 13-test-specification.md
-├── 14-spec-code-mapping.md
-└── 15-open-questions.md
-```
-
-さらに、業務フローについては必要に応じて以下も生成してください。
-
-```text
-excel/
-└── 業務フロー.xlsx
-```
-
----
-
-## 4. 機能別詳細解析フォーマット
-
-主要機能について、以下の形式で整理してください。
-
-### 機能名
-
-#### 1. 業務概要
-
-この処理が業務上何を行う機能なのか説明する。
-
-#### 2. Entry Point
-
-- File:
-- Class:
-- Method:
-- URL / Event:
-
-#### 3. Input
-
-#### 4. Call Chain
-
-```text
-xxx
 ↓
-xxx
+
+イベント
+
 ↓
-xxx
-```
 
-#### 5. 処理フロー
-
-1.
-2.
-3.
-4.
-5.
-
-#### 6. 業務ルール
-
-| Rule ID | Rule | Evidence |
-|---|---|---|
-
-#### 7. DB Read
-
-#### 8. DB Update
-
-#### 9. External API
-
-#### 10. Status Transition
-
-#### 11. Error / Exception
-
-#### 12. Transaction
-
-#### 13. Output
-
-#### 14. 関連Test
-
-#### 15. 未確認事項
-
----
-
-## 5. Confidence管理
-
-解析結果には必要に応じてConfidenceを付与してください。
-
-```text
-High
-Medium
-Low
-```
-
-基準：
-
-### High
-
-コードから直接確認できる。
-
-### Medium
-
-複数のコードから合理的に判断できる。
-
-### Low
-
-命名や周辺処理からの推測が多い。
-
-ただし、ConfidenceがLowの場合は必ず【推定】として扱ってください。
-
----
-
-## 6. Evidence管理
-
-業務ルールや重要仕様について、可能な限りEvidenceを構造化してください。
-
-例：
-
-```yaml
-rule_id: BR-001
-
-rule:
-  承認済み申請は再申請できない
-
-confidence:
-  high
-
-evidence:
-  - file: src/main/java/xxx/ApplicationService.java
-    class: ApplicationService
-    method: validateApplication
-    type: source_code
-
-  - file: src/test/java/xxx/ApplicationServiceTest.java
-    method: testAlreadyApproved
-    type: test
-```
-
----
-
-## 7. 解析順序
-
-巨大なRepositoryの場合、一度にすべてを詳細解析しないでください。
-
-以下の順序を守ってください。
-
-### Phase 1：全体把握
-
-1. Repository Structure
-2. Architecture
-3. Entry Points
-4. 主要Module
-5. DB / External System
-
-### Phase 2：主要業務機能特定
-
-業務上重要と思われる主要機能を一覧化してください。
-
-例：
-
-```text
-F-001 申請
-F-002 審査
-F-003 承認
-F-004 取消
-F-005 結果照会
-```
-
-### Phase 3：Call Chain解析
-
-主要機能ごとにCall Chainを追跡してください。
-
-### Phase 4：Business Rule解析
-
-条件分岐、Status、Validationを中心に業務ルールを抽出してください。
-
-### Phase 5：Business Flow生成
-
-技術実装を業務視点に変換してください。
-
-### Phase 6：DB / State / Error解析
-
-DB、状態遷移、Transaction、Error処理を補完してください。
-
-### Phase 7：Testによる仕様補完
-
-Test Codeを使用して仕様を検証してください。
-
-### Phase 8：Spec-Code Mapping
-
-業務仕様とImplementationを紐付けてください。
-
-### Phase 9：Excel業務フロー生成
-
-Business Flowを構造化データとして確定し、Excel上で編集可能な図形として生成してください。
-
-### Phase 10：最終Document生成
-
-すべてをMarkdown設計資料として統合してください。
-
----
-
-## 8. Skill間のデータ連携
-
-各Skillは独立した文章を生成するのではなく、可能な限り構造化された情報を次のSkillへ渡してください。
-
-基本データモデル：
-
-```yaml
-function:
-  id:
-  name:
-  description:
-
-entry_point:
-  file:
-  class:
-  method:
-
-call_chain:
-  - file:
-    class:
-    method:
-    role:
-
-business_rules:
-  - id:
-    condition:
-    business_meaning:
-    confidence:
-    evidence:
-
-business_flow:
-  flow_id:
-  nodes:
-  edges:
-  lanes:
-
-database:
-  - table:
-    operation:
-    sql:
-    source:
-
-state_transition:
-  - from:
-    condition:
-    to:
-    evidence:
-
-tests:
-  - file:
-    method:
-    verified_rule:
-
-open_questions:
-  -
-```
-
-これをSkill間の共通フォーマットとして使用してください。
-
----
-
-## 9. 解析品質に関する禁止事項
-
-### 9.1 ファイル名だけで仕様を推測しない
-
-例：
-
-`ApprovalService.java`
-
-という名前だけを見て、
-
-「承認処理を行っている」
-
-と断定しないこと。
-
-### 9.2 Call GraphをBusiness Flowとして扱わない
-
-以下は技術フローです。
-
-```text
 Controller
+
 ↓
+
 Service
+
 ↓
+
 Repository
-```
 
-以下は業務フローです。
-
-```text
-申請受付
 ↓
-審査
+
+SQL
+
 ↓
-承認判定
-↓
-結果登録
-```
 
-両者を混同しないでください。
+Table
 
-### 9.3 推測を仕様として記載しない
+まで追跡してください。
 
-コードから確認できないものは必ず、
+この関係をトレーサビリティ表として出力してください。
 
-- 【推定】
-- 【未確認】
+例：
 
-のいずれかとして扱ってください。
+画面	イベント	Controller	Service	Repository	SQL/Table
 
-### 9.4 重要な条件分岐を省略しない
+⸻
 
-正常系だけではなく、以下も解析してください。
+32. 中間データ
 
-- Error
-- Validation
-- 権限
-- Boundary
-- Status
-- Null
-- Retry
-- Rollback
+図を直接生成する前に、内部的に構造化データを作成してください。
 
-### 9.5 Repository全体を無制限に読み続けない
+例えば画面遷移の場合：
 
-まず重要箇所を特定し、そこから深掘りしてください。
+screen_id
 
-探索と詳細解析を分離してください。
+screen_name
 
-### 9.6 巨大な一枚図を作らない
+source_file
 
-システム全体の情報を一枚の巨大なフロー図に詰め込まないでください。
+url
 
-原則として、主要業務機能ごとに以下を分けて生成してください。
+event
 
-1. 業務フロー図
-2. Call Chain図
-3. State遷移図
-4. DB / External System図
+target_screen
 
----
+controller
 
-## 10. 推奨する図の種類
+method
 
-### 10.1 システム全体構成図
+confidence
 
-システムの主要コンポーネントと接続関係を示す。
+evidence
 
-### 10.2 業務フロー図
+などを保持してください。
 
-業務用語を使用し、処理の開始から終了までの業務的な流れを示す。
+業務フローも同様に構造化してください。
 
-### 10.3 Call Chain図
+この中間データを元にSVGを生成することで、図の内容と解析結果を一致させてください。
 
-画面、Controller、Service、Repository、SQL、DBなどの技術的な呼出し関係を示す。
+⸻
 
-### 10.4 業務 + コード対応図
+33. 不足情報への対応
 
-業務処理と実装メソッドの対応を示す。
+情報が不足している場合でも作業を停止しないでください。
 
-### 10.5 条件分岐詳細図
+確認可能な範囲を先に解析してください。
 
-複雑なif / else / switch / validationを業務的な判断フローとして可視化する。
+不足部分は、
 
-### 10.6 State遷移図
+「未確認」
 
-Status / State / Flagの変更条件と遷移先を示す。
+「推定」
 
-### 10.7 DBアクセス図
+として明示してください。
 
-業務機能とService / Repository / SQL / Tableの関係を示す。
+必要な追加確認事項を最後に整理してください。
 
----
+⸻
 
-## 11. 最終成果物
+34. 大規模プロジェクトの場合
+
+一度に全コードを解析しようとしないでください。
+
+以下の順で段階的に解析してください。
+
+Phase 1
+
+プロジェクト構造解析
+
+Phase 2
+
+画面・API・Controller抽出
+
+Phase 3
+
+依存関係解析
+
+Phase 4
+
+業務機能分類
+
+Phase 5
+
+画面遷移解析
+
+Phase 6
+
+Service業務ロジック解析
+
+Phase 7
+
+DB・SQL解析
+
+Phase 8
+
+業務フロー生成
+
+Phase 9
+
+SVG図生成
+
+Phase 10
+
+Word設計書生成
+
+⸻
+
+35. 既存資料が存在する場合
+
+既存の、
+
+* Excel設計書
+* Word設計書
+* 画面一覧
+* テーブル定義
+* API仕様
+* 業務仕様
+* テスト仕様書
+
+がある場合は必ず参照してください。
+
+ただし、既存資料を絶対的に正しいものとは扱わず、
+
+コード
+
+既存資料
+
+実装
+
+の差異を確認してください。
+
+差異がある場合は一覧化してください。
+
+⸻
+
+36. 最終品質基準
+
+成果物は、
+
+「コードを読んでいない別チームのSEが、このWord資料を読むことでシステム全体を理解できる」
+
+ことを目標としてください。
+
+特に以下を重視してください。
+
+* 業務の流れが分かる
+* 画面の繋がりが分かる
+* コードの依存関係が分かる
+* DBアクセスが分かる
+* 条件分岐が分かる
+* 根拠コードまで追える
+
+⸻
+
+37. 最重要ルール
+
+最終成果物では、
+
+文章だけで説明しないでください。
+
+画面遷移は画面遷移図にする。
+
+業務処理は業務フロー図にする。
+
+複雑な処理は処理フロー図にする。
+
+システム構造は構成図にする。
+
+図はSVGで生成し、Word本文へ挿入してください。
+
+最終的な見た目は、
+
+「日本企業のシステム開発案件で、顧客レビューに提出できる基本設計書」
+
+を基準としてください。
+
+⸻
+
+38. 成果物
 
 最終的に以下を生成してください。
 
-1. システム概要
-2. システム構成
-3. ディレクトリ／ファイル構成
-4. アーキテクチャ
-5. モジュール依存関係
-6. Entry Point一覧
-7. 機能一覧
-8. Call Chain一覧
-9. 業務フロー
-10. 機能別詳細処理
-11. 業務ルール一覧
-12. Status / State遷移
-13. DB・Entity・Repository関係
-14. CRUD Matrix
-15. 外部システム連携
-16. Error / Exception / Transaction
-17. Testから抽出した仕様
-18. 業務仕様 ↔ Code ↔ SQL ↔ Test対応表
-19. Excel業務フロー図
-20. 不整合一覧
-21. 未確認事項
-22. 追加調査が必要な箇所
+* システム解析Word
+* SVG形式の各種図
+* 画面一覧
+* 画面遷移定義一覧
+* 業務機能一覧
+* トレーサビリティ表
+* 推定事項一覧
 
----
+可能であればSVGファイルはWordとは別にも保存してください。
 
-## 12. 最終目標
+例：
 
-最終成果物は、コードを読んだことがないエンジニアが資料だけを読んでも、
+docs/
+├── system-analysis.docx
+├── diagrams/
+│   ├── system-architecture.svg
+│   ├── screen-transition-overview.svg
+│   ├── screen-transition-customer.svg
+│   ├── business-flow-login.svg
+│   ├── business-flow-customer-search.svg
+│   └── processing-flow-register.svg
+└── analysis/
+├── screen-list.md
+├── transition-list.md
+└── traceability.md
 
-**このシステムにはどのような業務機能が存在し、その処理がどこから始まり、どのモジュールを通り、どの業務判断を行い、どのDBや外部システムにアクセスし、どの状態へ遷移して、最終的にどうなるのか**
+⸻
 
-を追跡できるレベルにしてください。
+39. 作業開始時の出力
 
-さらに、各業務仕様について、
+実際にコード解析を開始する際は、まず以下を出力してください。
 
-```text
-業務仕様
-↓
-実装コード
-↓
-SQL / DB
-↓
-Test
-↓
-Excel業務フロー
-```
+1. 検出した技術スタック
+2. プロジェクト主要ディレクトリ
+3. 推定アーキテクチャ
+4. 最初に解析すべき主要機能
+5. 画面候補
+6. Controller / API候補
+7. 今後の解析順序
 
-まで逆引きできる状態を目標としてください。
+その後、段階的に解析してください。
 
-このRepositoryを解析する際は、いきなり最終ドキュメントを生成せず、
+⸻
 
-**全体把握 → 重要機能特定 → Call Chain → Business Rule → Business Flow → DB／State／Test → Spec-Code Mapping → Excel業務フロー → Document**
+40. 最終チェック
 
-の順序で進めてください。
+Word生成前に以下をチェックしてください。
+
+* 画面遷移漏れがないか
+* 孤立画面がないか
+* Controllerとの対応が取れているか
+* Serviceとの対応が取れているか
+* DBアクセス根拠があるか
+* 矢印ラベルが不足していないか
+* SVGの文字が読めるか
+* 線が過剰に交差していないか
+* ページからはみ出していないか
+* 推定情報が断定表現になっていないか
+* 図と一覧表に矛盾がないか
+
+問題がある場合は修正してからWordを生成してください。
